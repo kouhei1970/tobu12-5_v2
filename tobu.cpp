@@ -71,157 +71,166 @@ void kalman(void){
     float Dk_phi,Dk_t;
 
 /*-----------------------------------------------------------------------------------------------------------------------------------------*/
-  while(1)
-  {
-    sem_acquire_blocking(&sem);
-    sem_reset(&sem, 0);
-    //printf("%f\n",time);
-    ref_t=(Data2)*0.523598775598299*2;
-    ref_phi=(Data4)*0.52398775598299*2;
-    ref_psi=Data1;
-    dt=0.01;
-    omega_m <<wp,wq,wr;
-    z       <<ax,ay,az,mx,my,mz;//ここに入れる
-    //--Begin Extended Kalman Filter--
-    ekf(xp, xe, P, z, omega_m, Q, R, G*dt, beta, dt);
-    kalman_time = kalman_time + 0.01;
-   
-    phi=Phl(xe);
-    theta=Theta(xe);
-    psi=Psi(xe);
+    while(1)
+    {
+      sem_acquire_blocking(&sem);
+      sem_reset(&sem, 0);
+      //printf("%f\n",time);
+      ref_t=(Data2)*0.523598775598299*2;
+      ref_phi=(Data4)*0.52398775598299*2;
+      ref_psi=Data1;
+      dt=0.01;
+      omega_m <<wp,wq,wr;
+      z       <<ax,ay,az,mx,my,mz;//ここに入れる
+      //--Begin Extended Kalman Filter--
+      ekf(xp, xe, P, z, omega_m, Q, R, G*dt, beta, dt);
+      kalman_time = kalman_time + 0.01;
 
-    PSI=psi-psiav;
-    PHI=phi-phiav;
-    THETA=theta-thetaav;
+      phi=Phl(xe);
+      theta=Theta(xe);
+      psi=Psi(xe);
+
+      PSI=psi-psiav;
+      PHI=phi-phiav;
+      THETA=theta-thetaav;
 
 
-    if(Data3>=0.25){
+      if(Data3>=0.25){
 
-      //phi
-      olderr3_phi=olderr2_phi;
-      olderr2_phi=olderr_phi;
-      olderr_phi=err_phi;
-      err_phi=(ref_phi-PHI);
-      if (sk_phi<=30000){
-        sk_phi=sk_phi+err_phi;
+        //phi
+        olderr3_phi = olderr2_phi;
+        olderr2_phi = olderr_phi;
+        olderr_phi = err_phi;
+        err_phi = (ref_phi - PHI);
+        sk_phi = sk_phi + err_phi;//修正しました
+        if (sk_phi>30000)         //修正しました
+        {                         //修正しました
+          sk_phi = 30000;         //修正しました
+        }                         //修正しました
+        else if(sk_phi<-30000)    //修正しました
+        {                         //修正しました
+          sk_phi=-30000;          //修正しました
+        }                         //修正しました
+        dk_phi = (err_phi-olderr3_phi)*100;
+        Dk_phi = oldDk_phi*Ta/(Ta+0.01) + 0.01/(Ta+0.01)*dk_phi;
+        sphi = kpphi*(err_phi + 1/Ti_roll*sk_phi*0.01 + Td_roll*Dk_phi);
+        oldDk_phi = Dk_phi;  
+        //theta
+        olderr3_t = olderr2_t;
+        olderr2_t = olderr_t;
+        olderr_t = err_t;
+        err_t = (ref_t - THETA);
+        sk_t = sk_t + err_t;//修正しました
+        if (sk_t>30000)     //修正しました
+        {                   //修正しました
+          sk_t = 30000;     //修正しました
+        }                   //修正しました
+        else if(sk_t<-30000)//修正しました
+        {                   //修正しました
+          sk_t =-30000;     //修正しました
+        }                   //修正しました
+        dk_t = (err_t - olderr3_t)*100;
+        Dk_t = oldDk_t*Ta/(Ta+0.01) + 0.01/(Ta+0.01)*dk_t;
+        st = kpt*(err_t + 1/Ti_pitch*sk_t*0.01 + Td_pitch*Dk_t);
+        oldDk_t = Dk_t;  
       }
-      else if(-30000<=sk_phi){
-        sk_phi=sk_phi+err_phi;
-      }
-      dk_phi=(err_phi-olderr3_phi)*100;
-      Dk_phi=oldDk_phi*Ta/(Ta+0.01)+0.01/(Ta+0.01)*dk_phi;
-      sphi=kpphi*(err_phi+1/Ti_roll*sk_phi*0.01+Td_roll*Dk_phi);
-      oldDk_phi=Dk_phi;  
-      //theta
-      olderr3_t=olderr2_t;
-      olderr2_t=olderr_t;
-      olderr_t=err_t;
-      err_t=(ref_t-THETA);
-      if (sk_t<=30000){
-        sk_t=sk_t+err_t;
-      }
-      else if(-30000<=sk_t){
-        sk_t=sk_t+err_t;
-      }
-      dk_t=(err_t-olderr3_t)*100;
-      Dk_t=oldDk_t*Ta/(Ta+0.01)+0.01/(Ta+0.01)*dk_t;
-      st=kpt*(err_t+1/Ti_pitch*sk_t*0.01+Td_pitch*Dk_t);
-      oldDk_t=Dk_t;  
-    }
-    else{
-      sk_phi=0;
-      sk_t=0;
-      sphi=0;
-      st=0;
-      olderr_phi=0;
-      olderr2_phi=0;
-      olderr3_phi=0;
-      olderr_t=0;
-      olderr2_t=0;
-      olderr3_t=0;
-      phiav=phi;
-      thetaav=theta;
-      data2MID=Data2;
-      data4MID=Data4;
-    }    
-//スティック上
-  if(Data6<0.0){
-    if(Data3>=0.0){
-      if(logcount<47500){
-        gpio_put(LED_PIN, 1);
-        logdata[logcount++]=xe(0,0);
-        logdata[logcount++]=xe(1,0);
-        logdata[logcount++]=xe(2,0);
-        logdata[logcount++]=xe(3,0);
-        logdata[logcount++]=xe(4,0);
-        logdata[logcount++]=xe(5,0);
-        logdata[logcount++]=xe(6,0);
-        logdata[logcount++]=wp;
-        logdata[logcount++]=wq;
-        logdata[logcount++]=wr;
-        logdata[logcount++]=ax;
-        logdata[logcount++]=ay;
-        logdata[logcount++]=az;
-        logdata[logcount++]=mx;
-        logdata[logcount++]=my;
-        logdata[logcount++]=mz;
-        logdata[logcount++]=ref_a;
-        logdata[logcount++]=ref_e;
-        logdata[logcount++]=ref_r;
-        logdata[logcount++]=PHI;
-        logdata[logcount++]=THETA;
-        logdata[logcount++]=PSI;
-        logdata[logcount++]=ref_phi;
-        logdata[logcount++]=ref_t;
-        logdata[logcount++]=ref_psi;
-        logdata[logcount++]=sa;
-        logdata[logcount++]=se;
-        logdata[logcount++]=sr;
-
-
-    }
       else{
-        gpio_put(LED_PIN,0);
+        sk_phi=0;
+        sk_t=0;
+        sphi=0;
+        st=0;
+        olderr_phi=0;
+        olderr2_phi=0;
+        olderr3_phi=0;
+        olderr_t=0;
+        olderr2_t=0;
+        olderr3_t=0;
+        phiav=phi;
+        thetaav=theta;
+        data2MID=Data2;
+        data4MID=Data4;
+        oldDk_phi = 0.0;//追加しました
+        oldDk_t = 0.0;  //追加しました
+      }    
+      //スティック上
+      if(Data6<0.0){
+        if(Data3>=0.0){
+          if(logcount<47500){
+            gpio_put(LED_PIN, 1);
+            logdata[logcount++]=xe(0,0);
+            logdata[logcount++]=xe(1,0);
+            logdata[logcount++]=xe(2,0);
+            logdata[logcount++]=xe(3,0);
+            logdata[logcount++]=xe(4,0);
+            logdata[logcount++]=xe(5,0);
+            logdata[logcount++]=xe(6,0);
+            logdata[logcount++]=wp;
+            logdata[logcount++]=wq;
+            logdata[logcount++]=wr;
+            logdata[logcount++]=ax;
+            logdata[logcount++]=ay;
+            logdata[logcount++]=az;
+            logdata[logcount++]=mx;
+            logdata[logcount++]=my;
+            logdata[logcount++]=mz;
+            logdata[logcount++]=ref_a;
+            logdata[logcount++]=ref_e;
+            logdata[logcount++]=ref_r;
+            logdata[logcount++]=PHI;
+            logdata[logcount++]=THETA;
+            logdata[logcount++]=PSI;
+            logdata[logcount++]=ref_phi;
+            logdata[logcount++]=ref_t;
+            logdata[logcount++]=ref_psi;
+            logdata[logcount++]=sa;
+            logdata[logcount++]=se;
+            logdata[logcount++]=sr;
+
+
+          }
+          else{
+            gpio_put(LED_PIN,0);
+          }
+        }
+      }
+
+      //スティック下
+      else if(Data6>0.0){
+        if(Data3<=0.3){
+          gpio_put(LED_PIN, 0);
+          sleep_ms(500);
+          gpio_put(LED_PIN,1);
+          sleep_ms(500);
+          while(logcount > printcount+DATANUM){
+            for (uint8_t i=0;i<DATANUM;i++){
+              if(i==0){
+                printf("%8.2f ",T);
+                T=T+0.01;
+
+              }
+              sprintf(sbuf,"%12.5f",logdata[printcount+i]);
+              printf("%s",sbuf);
+            }
+
+            printf("\n");
+            printcount=printcount+DATANUM;
+          }
+        }
+      }
+      else if(Data3==0){
+        printcount=0.0;
+        T=0.0;
+      }
+      //スティック下
+      if(Data5>0.0){ 
+        gpio_put(LED_PIN, 1);
+        logcount=0;
+        printcount=0;
+        T=0.0;
       }
     }
-  }
-  
-  //スティック下
-  else if(Data6>0.0){
-    if(Data3<=0.3){
-      gpio_put(LED_PIN, 0);
-      sleep_ms(500);
-      gpio_put(LED_PIN,1);
-      sleep_ms(500);
-      while(logcount > printcount+DATANUM){
-          for (uint8_t i=0;i<DATANUM;i++){
-            if(i==0){
-              printf("%8.2f ",T);
-              T=T+0.01;
+}
 
-            }
-             sprintf(sbuf,"%12.5f",logdata[printcount+i]);
-             printf("%s",sbuf);
-          }
-
-          printf("\n");
-          printcount=printcount+DATANUM;
-    }
-    }
-  }
-  else if(Data3==0){
-    printcount=0.0;
-    T=0.0;
-  }
-//スティック下
-  if(Data5>0.0){ 
-   gpio_put(LED_PIN, 1);
-   logcount=0;
-   printcount=0;
-   T=0.0;
-}
-}
-}
 short safetycount=1;
 /*---------------------------------------------------------------------------------------------------------------------------------------------------------*/
 void MAINLOOP(void)
@@ -285,55 +294,55 @@ void MAINLOOP(void)
   ref_r=Data1*6.283185307;
 
   
-    //エレベータq
-  
+  //エレベータq
   olderr3_e=olderr2_e;
   olderr2_e=olderr_e;
   olderr_e=err_e;
   err_e=(ref_e - (wq-Wqa));
-
-  if (sk_e<=30000){
-    sk_e=sk_e+err_e;
-  }
-  else if(-30000<=sk_e){
-    sk_e=sk_e+err_e;
-  }
-  
+  sk_e=sk_e+err_e;       //修正しました
+  if (sk_e > 30000){     //修正しました
+    sk_e = 30000;        //修正しました
+  }                      //修正しました
+  else if(sk_e <-30000 ){//修正しました
+    sk_e =-30000;        //修正しました
+  }                      //修正しました
   dk_e=(err_e-olderr3_e)*400;
   Dk_e=oldDk_e*Tb/(Tb+0.0025)+0.0025/(Tb+0.0025)*dk_e;
   se=kpe*(err_e+1/Ti*sk_e*0.0025+Td*Dk_e);
   oldDk_e=Dk_e;   
 
   //エルロンp
-
   olderr3_a=olderr2_a;
   olderr2_a=olderr_a;
   olderr_a=err_a;
   err_a=(ref_a - (wp-Wpa));
-  if (sk_a<=30000){
-    sk_a=sk_a+err_a;
-  }
-  else if(-30000<=sk_a){
-    sk_a=sk_a+err_a;
-  }
+  sk_a = sk_a+err_a;    //修正しました
+  if (sk_a > 30000)     //修正しました
+  {                     //修正しました
+    sk_a = 30000;       //修正しました
+  }                     //修正しました
+  else if(sk_a <-30000){//修正しました
+    sk_a =-30000;       //修正しました
+  }                     //修正しました
   dk_a=(err_a-olderr3_a)*400;
   Dk_a=oldDk_a*Tb/(Tb+0.0025)+0.0025/(Tb+0.0025)*dk_a;  
   sa=kpa*(err_a+1/Ti*sk_a*0.0025+Td*Dk_a);
   oldDk_a=Dk_a;
 
   //ラダーr
-
-  
   olderr3_r=olderr2_r;
   olderr2_r=olderr_r;
   olderr_r=err_r;
   err_r=(ref_r - (wr-Wra));
-  if (sk_r<=30000){
-    sk_r=sk_r+err_r;
-  }
-  else if(-30000<=sk_r){
-    sk_r=sk_r+err_r;
-  }
+  sk_r = sk_r+err_r;   //修正しました
+  if (sk_r > 30000)    //修正しました
+  {                    //修正しました
+    sk_r = 30000;      //修正しました
+  }                    //修正しました
+  else if(sk_r <-30000)//修正しました
+  {                    //修正しました
+    sk_r =-30000;      //修正しました
+  }                    //修正しました
   dk_r=(err_r-olderr3_r)*400;
   Dk_r=oldDk_r*Tb/(Tb+0.0025)+0.0025/(Tb+0.0025)*dk_r;  
   sr=kpr*(err_r+1/Ti*sk_r*0.0025+Td*Dk_r);
@@ -417,8 +426,9 @@ void MAINLOOP(void)
     err_e=0.0;
     oldDk_r=0.0;
     oldDk_a=0.0;
-    oldDk_phi=0.0;
-    oldDk_t=0.0;
+    oldDk_e=0.0;     //追加しました
+    //oldDk_phi=0.0; //角度制御に持っていきました
+    //oldDk_t=0.0;   //角度制御に持っていきました
 
 
   }
