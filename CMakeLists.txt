@@ -9,7 +9,7 @@ set(CMAKE_CXX_STANDARD 17)
 pico_sdk_init()
 
 
-include_directories(/home/sakanishi/pico/eigen)
+include_directories(/Users/itoukouhei/pico/eigen)
 
 add_executable(tobu
         tobu.cpp

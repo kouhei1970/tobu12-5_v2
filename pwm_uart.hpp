@@ -5,6 +5,8 @@
 #include "hardware/uart.h"
 #include "pico/stdlib.h"
 #include "hardware/pwm.h"
+#include "tobu.hpp"
+
 #define dutymin 1250
 #define dutymax 2500           //1520
 #define UART_ID uart0
@@ -33,6 +35,7 @@
 #define CH6MID 1024
 #define UART_TX_PIN 0
 #define UART_RX_PIN 1
+
 extern float Data1,Data2,Data3,Data4,Data5,Data6;
 extern uint slice_num[2];
 uint8_t serial_settei(void);
