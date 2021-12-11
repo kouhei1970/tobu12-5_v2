@@ -46,10 +46,12 @@ volatile float Dk_p=0.0, Dk_q=0.0, Dk_r=0.0;
 volatile float Dk_phi=0.0, Dk_t=0.0;
 volatile float Up=0.0,Uq=0.0,Ur=0.0;
 
-//PID Gain
+//Filter Time Constance
+
 const float Tc_angl = 0.018;
 const float Tc_rate = 0.012;
 
+//PID Gain
 const float Kp_phi   = 0.0;
 const float Ti_phi   = 100.0;
 const float Td_phi = 0.0;//0.00004;
@@ -60,15 +62,15 @@ const float Td_theta = 0.0;//0.00004;
 
 const float Kp_psi = 0.0;
 
-const float Kp_p = 0.1;
+const float Kp_p = 0.0;//0.1;
 const float Ti_p = 100.0;
 const float Td_p = 0.0;//0.0000014;
 
-const float Kp_q = 0.1;
+const float Kp_q = 0.0;//0.1;
 const float Ti_q = 100.0;
 const float Td_q = 0.0;//0.0000014;
 
-const float Kp_r = 0.1;
+const float Kp_r = 0.0;//0.1;
 const float Ti_r = 100.0;
 const float Td_r = 0.0;//0.0000014;
 
@@ -280,7 +282,7 @@ void kalman(void){
       Olderr1_t=0.0;
       Olderr2_t=0.0;
       Olderr3_t=0.0;
-      //現在の角度（0）を記憶
+      //現在の角度（水平の姿勢）を記憶
       Phiav=Phi;
       Thetaav=Theta;
       //data2MID=Data2;

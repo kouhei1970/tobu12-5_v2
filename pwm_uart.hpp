@@ -15,8 +15,8 @@
 #define DATA_BITS 8
 #define STOP_BITS 2             //1
 #define PARITY    UART_PARITY_EVEN
-#define DUTYMIN 1265
-#define DUTYMAX 2485
+#define DUTYMIN 1257 //1005us //1265
+#define DUTYMAX 2493 //1995us //2485
 #define CH1MAX 1680
 #define CH1MIN 368
 #define CH1MID 1020
