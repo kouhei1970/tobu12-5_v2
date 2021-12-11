@@ -2,7 +2,7 @@
 
 
 //グローバル変数
-float MN, ME, MD;
+float MN=0.0, ME=0.0, MD=0.0;
 
 int16_t data_raw_acceleration[3];
 int16_t data_raw_angular_rate[3];
@@ -15,9 +15,9 @@ uint8_t tx_buffer_mag[1000];
 float acceleration_mg[3];
 float angular_rate_mdps[3];
 float magnetic_field_mgauss[3];
-float Acceleration_mg[3];
-float Angular_rate_mdps[3];
-float Magnetic_field_mgauss[3];
+//float Acceleration_mg[3];
+//float Angular_rate_mdps[3];
+//float Magnetic_field_mgauss[3];
 sensbus_t Ins_bus={spi1, PIN_CSAG};
 sensbus_t Mag_bus={spi1, PIN_CSM};
 stmdev_ctx_t Imu_h;
@@ -344,27 +344,19 @@ uint8_t ekf( Matrix<float, 7, 1> &xe,
   return 0;
 }
 
-
-
-
-
-
-
-
-
-float Phl(Matrix<float, 7, 1>x){
+float CalcPhi(Matrix<float, 7, 1>x){
         double e23,e33;
-        double phl=0;
+        double phi=0;
         float qzero= x(0, 0);
         float qone = x(1, 0);
         float qtwo = x(2, 0);
         float qthree = x(3, 0);
         e23=2*(qtwo*qthree+qzero*qone);
         e33=qzero*qzero-qone*qone-qtwo*qtwo+qthree*qthree;
-        phl=atan2(e23,e33);
-        return phl;
+        phi=atan2(e23,e33);
+        return phi;
 }
-float Theta(Matrix<float, 7, 1>x){
+float CalcTheta(Matrix<float, 7, 1>x){
         double e13,e23,e33;
         double theta=0;
         float qzero= x(0, 0);
@@ -377,7 +369,7 @@ float Theta(Matrix<float, 7, 1>x){
         theta=atan2(-e13,sqrt(e23*e23+e33*e33));
         return theta;
 }
-float Psi(Matrix<float, 7, 1>x){
+float CalcPsi(Matrix<float, 7, 1>x){
         float qzero= x(0, 0);
         float qone = x(1, 0);
         float qtwo = x(2, 0);

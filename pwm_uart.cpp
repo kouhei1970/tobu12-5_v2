@@ -14,11 +14,6 @@ float Data1=0.0,Data2=0.0,Data3=0.0,Data4=0.0,Data5=0.0,Data6=0.0;
 //uint8_t serial_settei(void);
 //uint8_t pwm_settei();
 void on_uart_rx();
-
-/* Private variables ---------------------------------------------------------*/
-
-
-
 /*
  *   WARNING:
  *   Functions declare in this section are defined at the end of this file
@@ -66,13 +61,29 @@ uint8_t serial_settei(void){
 }
 
 uint8_t pwm_settei(void){
-  //pwmの設定
-  // Tell GPIO 0 and 1 they are allocated to the PWM
+  // PWMの設定
+  //
+  // GPIO 2 RR Motor 
+  // GPOI 3 FR Motor
+  // GPIO 4 RL Motor
+  // GPIO 5 FL Motor
+  // GPIO 6 Servo
+  //
+  // Set period T
+  // T=(wrap+1)*clkdiv/sysclock
+  // T = (3124+1)*100/125e6 = 3125e2/125e6=25e-4=0.0025s(=400Hz)
+  //
+  // Set Duty
+  // Duty=clkdiv*PWM_CHAN_level/sysclock
+  // Duty = 100 * 2500 /125e6 = 25.0e4/125e6=0.2e-2=0.002s=2ms
+  // Duty = 100 * 1250 /125e6 = 12.5e4/125e6=0.1e-2=0.001s=1ms
+  //
+  // Tell GPIO 2-5 they are allocated to the PWM
   gpio_set_function(2, GPIO_FUNC_PWM);
   gpio_set_function(3, GPIO_FUNC_PWM);
   gpio_set_function(4, GPIO_FUNC_PWM);
   gpio_set_function(5, GPIO_FUNC_PWM);
-  // Find out which PWM slice is connected to GPIO 0 (it's slice 0)
+  // Find out which PWM slice is connected to GPIO 3 and 4
   slice_num[0] = pwm_gpio_to_slice_num(3);
   slice_num[1] = pwm_gpio_to_slice_num(4);
 
@@ -82,26 +93,76 @@ uint8_t pwm_settei(void){
   pwm_set_wrap(slice_num[1], 3124);
   pwm_set_clkdiv(slice_num[1], 100.0);
 
-  // Set channel A output high for one cycle before dropping
+//以下の#ifで1にするとESCキャリブレーションが動作する
+#if 0
+  //Start ESC calibration
+  // Set the PWM Duty Maximum
   pwm_set_chan_level(slice_num[0], PWM_CHAN_A, DUTYMAX);
   pwm_set_chan_level(slice_num[0], PWM_CHAN_B, DUTYMAX);
   pwm_set_chan_level(slice_num[1], PWM_CHAN_A, DUTYMAX);
   pwm_set_chan_level(slice_num[1], PWM_CHAN_B, DUTYMAX);
-  // Set the PWM running
+  //Enable PWM Signal
   pwm_set_enabled(slice_num[0], true);
   pwm_set_enabled(slice_num[1], true);
-  /// \end::setup_pwm[]
+  // Wait 4s
   sleep_ms(4000);
+  // Set the PWM Duty minimum
   pwm_set_chan_level(slice_num[0], PWM_CHAN_A, DUTYMIN);
   pwm_set_chan_level(slice_num[0], PWM_CHAN_B, DUTYMIN);
   pwm_set_chan_level(slice_num[1], PWM_CHAN_A, DUTYMIN);
   pwm_set_chan_level(slice_num[1], PWM_CHAN_B, DUTYMIN);
+#else
+  //Start ESC control without ESC calibration 
+  // Set the PWM Duty minimum
+  pwm_set_chan_level(slice_num[0], PWM_CHAN_A, DUTYMIN);
+  pwm_set_chan_level(slice_num[0], PWM_CHAN_B, DUTYMIN);
+  pwm_set_chan_level(slice_num[1], PWM_CHAN_A, DUTYMIN);
+  pwm_set_chan_level(slice_num[1], PWM_CHAN_B, DUTYMIN);
+  //Enable PWM Signal
+  pwm_set_enabled(slice_num[0], true);
+  pwm_set_enabled(slice_num[1], true);
+#endif
+
   pwm_clear_irq(slice_num[1]);
   pwm_set_irq_enabled(slice_num[1], true);
   irq_set_exclusive_handler(PWM_IRQ_WRAP,MAINLOOP);
   irq_set_enabled(PWM_IRQ_WRAP, true);
   return 0;
 }
+
+void set_duty_fr(float duty)
+{
+    duty=(float)(DUTYMAX-DUTYMIN)*duty+DUTYMIN;
+    if (duty>DUTYMAX-50)duty=DUTYMAX-50;
+    if (duty<DUTYMIN+15)duty=DUTYMIN+15;
+    pwm_set_chan_level(slice_num[0], PWM_CHAN_B, duty);
+}
+
+void set_duty_fl(float duty)
+{
+    duty=(float)(DUTYMAX-DUTYMIN)*duty+DUTYMIN;
+    if (duty>DUTYMAX-50)duty=DUTYMAX-50;
+    if (duty<DUTYMIN+15)duty=DUTYMIN+15;
+    pwm_set_chan_level(slice_num[1], PWM_CHAN_B, duty);
+}
+
+void set_duty_rr(float duty)
+{
+    duty=(float)(DUTYMAX-DUTYMIN)*duty+DUTYMIN;
+    if (duty>DUTYMAX-50)duty=DUTYMAX-50;
+    if (duty<DUTYMIN+15)duty=DUTYMIN+15;
+    pwm_set_chan_level(slice_num[0], PWM_CHAN_A, duty);
+}
+
+void set_duty_rl(float duty)
+{
+    duty=(float)(DUTYMAX-DUTYMIN)*duty+DUTYMIN;
+    if (duty>DUTYMAX-50)duty=DUTYMAX-50;
+    if (duty<DUTYMIN+15)duty=DUTYMIN+15;
+    pwm_set_chan_level(slice_num[1], PWM_CHAN_A, duty);
+}
+
+
 void on_uart_rx() {
   short data;
   while (uart_is_readable(UART_ID)) {
@@ -116,9 +177,6 @@ void on_uart_rx() {
       //printf("%02X ",ch);
       chars_rxed++;            
     }
-
-
-    // Can we send it back?
     //if (uart_is_writable(UART_ID)) {
     //    // Change it slightly first!
     //ch++;
@@ -162,7 +220,6 @@ void on_uart_rx() {
         //printf("%04d ",Olddata[5]);
         //printf("%04f ",Data6);
         break;
-
     }
 
     if(chars_rxed==25)
@@ -170,7 +227,6 @@ void on_uart_rx() {
       //printf("\n");
       chars_rxed=0;
     }
-
   }
 }
 

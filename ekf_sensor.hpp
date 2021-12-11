@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include <Eigen/Dense>
 #include <stdio.h>
-#include<cmath>
+#include <math.h>
 #include <iostream>
 #include "pico/stdlib.h"
 #include <string.h>
@@ -22,8 +22,6 @@
 #define PIN_SCK  10
 #define PIN_MOSI 11
 #define GRAV (9.80665)
-//#define MN (0.75)
-//#define MD (0.75)
 #define PI (3.14159)
 
 using Eigen::MatrixXd;
@@ -33,31 +31,23 @@ using Eigen::Matrix;
 using Eigen::PartialPivLU;
 using namespace Eigen;
 
-extern  int16_t data_raw_acceleration[3];
-extern  int16_t data_raw_angular_rate[3];
-extern  int16_t data_raw_magnetic_field[3];
+//extern  int16_t data_raw_acceleration[3];
+//extern  int16_t data_raw_angular_rate[3];
+//extern  int16_t data_raw_magnetic_field[3];
 extern  float acceleration_mg[3];
 extern  float angular_rate_mdps[3];
 extern  float magnetic_field_mgauss[3];
-extern float q0;
-extern float q1;
-extern float q2;
-extern float q3;
-extern float dp;
-extern float dq;
-extern float dr;
-extern sensbus_t Ins_bus;
-extern sensbus_t Mag_bus;
-extern stmdev_ctx_t Imu_h;
-extern stmdev_ctx_t Mag_h;
-extern float dt;
+//extern sensbus_t Ins_bus;
+//extern sensbus_t Mag_bus;
+//extern stmdev_ctx_t Imu_h;
+//extern stmdev_ctx_t Mag_h;
 extern float MN,ME,MD;
 
 void imu_mag_data_read(void);
 void imu_mag_init(void);
-float Psi(Matrix<float, 7, 1>x);
-float Theta(Matrix<float, 7, 1>x);
-float Phl(Matrix<float, 7, 1>x);
+float CalcPsi(Matrix<float, 7, 1>x);
+float CalcTheta(Matrix<float, 7, 1>x);
+float CalcPhi(Matrix<float, 7, 1>x);
 uint8_t ekf( Matrix<float, 7, 1> &xe,
              Matrix<float, 7, 1> &xp,
              Matrix<float, 7, 7> &P,
