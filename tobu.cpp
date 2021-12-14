@@ -16,7 +16,7 @@ Matrix<float, 3 ,1> Beta;
 volatile float Ax,Ay,Az,Wp,Wq,Wr,Mx,My,Mz;
 volatile float Dmx,Dmy,Dmz;
 volatile float Wqa=0.0, Wpa=0.0,Wra=0.0; 
-volatile float Phi,Theta,Psi;
+volatile float Phi=0.0,Theta=0.0,Psi=0.0;
 volatile float Kalman_time=0.0;
 volatile uint8_t Hzcount=0;
 volatile float Psiav=0.0, Phiav=0.0, Thetaav=0.0;
@@ -47,41 +47,48 @@ volatile float Dk_phi=0.0, Dk_t=0.0;
 volatile float Up=0.0,Uq=0.0,Ur=0.0;
 
 //Filter Time Constance
-
 const float Tc_angl = 0.018;
 const float Tc_rate = 0.012;
 
 //PID Gain
-const float Kp_phi   = 0.0;
-const float Ti_phi   = 100.0;
-const float Td_phi = 0.0;//0.00004;
+const float Kp_phi   = 4.0;//3.5
+const float Ti_phi   = 3000.0;//5000
+const float Td_phi = 0.002;//0.002;
 
-const float Kp_theta = 0.0;
-const float Ti_theta = 100.0;
-const float Td_theta = 0.0;//0.00004;
+const float Kp_theta = 3.2;
+const float Ti_theta = 5000.0;
+const float Td_theta = 0.002;//0.00004;
 
-const float Kp_psi = 0.0;
+const float Kp_psi = 0.7;
 
-const float Kp_p = 0.0;//0.1;
-const float Ti_p = 100.0;
+const float Kp_p = 0.2;//0.1;
+const float Ti_p = 50000.0;
 const float Td_p = 0.0;//0.0000014;
 
-const float Kp_q = 0.0;//0.1;
-const float Ti_q = 100.0;
+const float Kp_q = 0.29;//0.1;
+const float Ti_q = 40000.0;
 const float Td_q = 0.0;//0.0000014;
 
-const float Kp_r = 0.0;//0.1;
-const float Ti_r = 100.0;
+const float Kp_r = 0.72;//0.1;
+const float Ti_r = 50000.0;
 const float Td_r = 0.0;//0.0000014;
 
 //for Motor control
 volatile float Duty_rr,Duty_rl,Duty_fl,Duty_fr; 
 volatile float Com_rr,Com_rl,Com_fl,Com_fr; 
 
+//Rocking wings
+float Rocking_time=0.0;
+float Rocking_flag = 0;
+
+
 //for etc
 const uint LED_PIN = 25;
 volatile uint8_t Safetycount=1;
 uint32_t s_time, e_time, d_time;
+volatile uint8_t Kalman_flag=1;
+float Q0av=0.0;
+
 
 #if 0
 //volatile float PHI,THETA,PSI;
@@ -90,6 +97,10 @@ uint32_t s_time, e_time, d_time;
 volatile float data2MID,data4MID;
 volatile float Time_for_debug = 0.0;
 #endif
+
+//ローカル関数宣言
+void read_sensor(void);
+void kalman(void);
 /*--------------------------------------------------------------------------------------------------------------------------------------*/
 
 void kalman(void){
@@ -112,15 +123,21 @@ void kalman(void){
     Omega_m << (float)Wp, (float)Wq, (float)Wr;
     Z << (float)Ax, (float)Ay, (float)Az, (float)Mx, (float)My, (float)Mz;//ここに入れる
     //--Begin Extended Kalman Filter--
-    ekf(Xp, Xe, P, Z, Omega_m, Q, R, G*dt, Beta, dt);
-    Kalman_time = Kalman_time + 0.01;
+    if(Kalman_flag==1)
+    {
+      //std::cout << "Omega" << Omega_m << std::endl;
+      //std::cout << "Z" << Z << std::endl;
+      //printf("%8.2f %12.4f %12.4f %12.4f %12.4f %12.4f %12.4f %12.4f\n",
+      //  Kalman_time, Xe(0,0),Xe(1,0),Xe(2,0),Xe(3,0),Xe(4,0),Xe(5,0),Xe(6,0));
+      
+      ekf(Xp, Xe, P, Z, Omega_m, Q, R, G*dt, Beta, dt);
 
-    Phi = CalcPhi(Xe);
-    Theta = CalcTheta(Xe);
-    Psi = CalcPsi(Xe);
-    //printf("%8.2f %12.4f %12.4f %12.4f %12.4f %12.4f %12.4f %12.4f\n",
-    //  Kalman_time, Xe(0,0),Xe(1,0),Xe(2,0),Xe(3,0),Xe(4,0),Xe(5,0),Xe(6,0));
-
+      Phi = CalcPhi(Xe);
+      Theta = CalcTheta(Xe);
+      Psi = CalcPsi(Xe);
+    
+      Kalman_time = Kalman_time + 0.01;
+    }
 
     //スティック上
     if(Data6<-0.2)
@@ -209,7 +226,7 @@ void kalman(void){
     else if(-0.1<Data6 && Data6<0.1)
     {
       //printf("mid log sw\n");
-      if(Kalman_time>17.0)gpio_put(LED_PIN, 0);
+      if(Kalman_time>12.0)gpio_put(LED_PIN, 0);
       Printcount = 0;
       Logcount = 0;
       Tlog = 0.0;
@@ -427,7 +444,7 @@ void MAINLOOP(void)
   Olderr2_r = Olderr1_r;
   Olderr1_r = err_r;
 
-  if(Kalman_time>25.0){
+  if(Kalman_time>12.0){
     if(Data3<0.1){
       if(Data2>0.9 && Data4>0.9 && Safetycount==0){
         Safetycount=1;
@@ -513,32 +530,40 @@ void MAINLOOP(void)
 #endif
 }
 /*-----------------------------------------------------------------------------------------------------------------------------------------------------------*/
-int main(void)
+
+void init_kalman(float mx, float my, float mz)
 {
-  uint16_t f;
-  uint8_t waittime=5;
-  float old_kalman_time;
-  //float Thetaplas=0.0,Psiplas=0.0,Phiplas=0.0;
-  const uint LED_PIN = 25;        //LED_PIN=0  
-  gpio_init(LED_PIN);             //gpioを使えるようにする
-  gpio_set_dir(25, GPIO_OUT);
-
-  Xe << 1.00, 0.0, 0.0, 0.0,0.0,0.0, 0.0;
+  Xe << 1.00, 0.0, 0.0, 0.0, mx, my, mz;
   Xp =Xe;
-
+/*
   Q <<  0.00872, 0.0   , 0.0     , 0.0   , 0.0   , 0.0,
         0.0   , 0.00198, 0.0     , 0.0   , 0.0   , 0.0,
-        0.0   , 0.0   , 0.000236,   0.0   , 0.0   , 0.0,
-        0.0   , 0.0   , 0.0     , 0.5e-5, 0.0   , 0.0,
-        0.0   , 0.0   , 0.0     , 0.0   , 0.5e-5, 0.0,
-        0.0   , 0.0   , 0.0     , 0.0   , 0.0   , 0.1e0;
+        0.0   , 0.0   , 0.000236 , 0.0   , 0.0   , 0.0,
+        0.0   , 0.0   , 0.0      , 0.5e-5, 0.0   , 0.0,
+        0.0   , 0.0   , 0.0      , 0.0   , 0.5e-5, 0.0,
+        0.0   , 0.0   , 0.0      , 0.0   , 0.0   , 0.1e0;
 
-  R <<  1e-1    , 0.0    , 0.0    , 0.0     , 0.0     , 0.0,
-        0.0    , 1e-1    , 0.0    , 0.0     , 0.0     , 0.0,
-        0.0    , 0.0    , 5e-1    , 0.0     , 0.0     , 0.0,
-        0.0    , 0.0    , 0.0    , 1e-2     , 0.0     , 0.0,
-        0.0    , 0.0    , 0.0    , 0.0     , 1e-2     , 0.0,
+  R <<  1e-1   , 0.0    , 0.0    , 0.0     , 0.0     , 0.0,
+        0.0    , 1e-1   , 0.0    , 0.0     , 0.0     , 0.0,
+        0.0    , 0.0    , 5e-1   , 0.0     , 0.0     , 0.0,
+        0.0    , 0.0    , 0.0    , 1e-2    , 0.0     , 0.0,
+        0.0    , 0.0    , 0.0    , 0.0     , 1e-2    , 0.0,
         0.0    , 0.0    , 0.0    , 0.0     , 0.0     , 1e-3;
+*/
+  Q <<  1.0e-5, 0.0   , 0.0     , 0.0   , 0.0   , 0.0,
+        0.0   , 1.0e-5, 0.0     , 0.0   , 0.0   , 0.0,
+        0.0   , 0.0   , 1.0e-5 , 0.0   , 0.0   , 0.0,
+        0.0   , 0.0   , 0.0      , 0.5e-3, 0.0   , 0.0,
+        0.0   , 0.0   , 0.0      , 0.0   , 0.2e-3, 0.0,
+        0.0   , 0.0   , 0.0      , 0.0   , 0.0   , 0.1e-2;
+
+  R <<  1e-1   , 0.0    , 0.0    , 0.0     , 0.0     , 0.0,
+        0.0    , 1e-1   , 0.0    , 0.0     , 0.0     , 0.0,
+        0.0    , 0.0    , 5e-1   , 0.0     , 0.0     , 0.0,
+        0.0    , 0.0    , 0.0    , 1e-4    , 0.0     , 0.0,
+        0.0    , 0.0    , 0.0    , 0.0     , 1e-4    , 0.0,
+        0.0    , 0.0    , 0.0    , 0.0     , 0.0     , 1e-2;
+
 
   G << -1.0,-1.0,-1.0, 0.0, 0.0, 0.0, 
         1.0,-1.0, 1.0, 0.0, 0.0, 0.0, 
@@ -550,103 +575,146 @@ int main(void)
 
   Beta << 0.0, 0.0, 0.0;
 
-  P <<  1e0,0,0,0,0,0,0,  
-          0,1e0,0,0,0,0,0,
-          0,  0,1e0,0,0,0,
-          0,0,0,1e0,0,0,0, 
-          0,0,0,0,1.0e-2,0,0,  
-          0,0,0,0,0,1.0e-2,0,  
-          0,0,0,0,0,0,1.0e-2;
+  P <<  1e0,   0,   0,   0,     0,     0,     0,  
+          0, 1e0,   0,   0,     0,     0,     0,
+          0,   0, 1e0,   0,     0,     0,     0,
+          0,   0,   0, 1e0,     0,     0,     0, 
+          0,   0,   0,   0, 1.0e0,     0,     0,  
+          0,   0,   0,   0,     0, 1.0e0,     0,  
+          0,   0,   0,   0,     0,     0, 1.0e0;
+}
 
 
+int main(void)
+{
+  uint16_t f;
+  uint8_t waittime=5;
+  float old_kalman_time;
+  //float Thetaplas=0.0,Psiplas=0.0,Phiplas=0.0;
+  const uint LED_PIN = 25;        //LED_PIN=0  
+  gpio_init(LED_PIN);             //gpioを使えるようにする
+  gpio_set_dir(25, GPIO_OUT);
   stdio_init_all();
   imu_mag_init();
   serial_settei();
-
   gpio_put(LED_PIN, 1);
   sleep_ms(1000);
   gpio_put(LED_PIN, 0);
-
+#if 0
   for (uint8_t i=0;i<waittime;i++)
   {
      printf("#Please wait %d[s] ! \n",waittime-i);
      sleep_ms(1000);
   }
   printf("#Start Kalman Filter\n");
-
-  MN = 0.0;
-  ME = 0.0;
-  MD = 0.0;  
-  f=0;
-  while(f<400){
-    float mx1,my1,mz1;
-    imu_mag_data_read();
-    Wp=    angular_rate_mdps[0]*0.001*0.017453292;
-    Wq=    angular_rate_mdps[1]*0.001*0.017453292;
-    Wr=   -angular_rate_mdps[2]*0.001*0.017453292;
-    Dmx=  -(magnetic_field_mgauss[0]);
-    Dmy=   (magnetic_field_mgauss[1]);
-    Dmz=  -(magnetic_field_mgauss[2]);
-
-    //回転行列
-    const float rot[9]={-0.78435472, -0.62015392, -0.01402787,
-      0.61753358, -0.78277935,  0.07686857,
-      -0.05865107,  0.05162955,  0.99694255};
-    //中心座標
-    const float center[3]={-109.32529343620176, 72.76584808916506, 759.2285249891385};
-    //拡大係数
-    const float zoom[3]={0.002034773458122364, 0.002173892202021849, 0.0021819494099235273};
-
-    //回転・平行移動・拡大
-    mx1 = zoom[0]*( rot[0]*Dmx +rot[1]*Dmy +rot[2]*Dmz -center[0]);
-    my1 = zoom[1]*( rot[3]*Dmx +rot[4]*Dmy +rot[5]*Dmz -center[1]);
-    mz1 = zoom[2]*( rot[6]*Dmx +rot[7]*Dmy +rot[8]*Dmz -center[2]);
-    //逆回転
-    Mx = rot[0]*mx1 +rot[3]*my1 +rot[6]*mz1;
-    My = rot[1]*mx1 +rot[4]*my1 +rot[7]*mz1;
-    Mz = rot[2]*mx1 +rot[5]*my1 +rot[8]*mz1; 
-    float mag_norm=sqrt(Mx*Mx +My*My +Mz*Mz);
-    Mx/=mag_norm;
-    My/=mag_norm;
-    Mz/=mag_norm;
-
-    MN=MN+Mx;
-    ME=ME+My;
-    MD=MD+Mz;
-    Wqa=Wq+Wqa;
-    Wpa=Wp+Wpa;
-    Wra=Wr+Wra;
-    f=f+1;
-    sleep_us(2500);
-  }
-  Wpa=Wpa/400;
-  Wqa=Wqa/400;
-  Wra=Wra/400;
-  MN=MN/400;
-  ME=ME/400;
-  MD=MD/400;
-  
-  Xe(4,0)=Wpa;
-  Xe(5,0)=Wqa;
-  Xe(6,0)=Wra;
-  Xp(4,0)=Wpa;
-  Xp(5,0)=Wqa;
-  Xp(6,0)=Wra;
-
-  printf("#omega ave %f %f %f\n",Wpa, Wqa, Wra);
-
-  
-  printf("#mag ave %f %f %f\n",MN, ME, MD);
+#endif
   
   sem_init(&sem, 0, 1);
   multicore_launch_core1(kalman);
-
   pwm_settei();
-  
+  printf("#Start Kalman filter test !\n");
+
+  Q0av = 0.0;
+  while(Q0av<0.995 || isinf(Q0av))
+  {
+    MN = 0.0;
+    ME = 0.0;
+    MD = 0.0;
+    Wpa = 0.0;
+    Wqa = 0.0;
+    Wra = 0.0;
+    f = 0;
+    Kalman_time = 0.0;
+    old_kalman_time = Kalman_time;
+    while(Kalman_time<2.0)
+    {
+      if(Kalman_time!=old_kalman_time)
+      {
+        MN=MN+Mx;
+        ME=ME+My;
+        MD=MD+Mz;
+        Wqa=Wq+Wqa;
+        Wpa=Wp+Wpa;
+        Wra=Wr+Wra;
+        f=f+1;
+        old_kalman_time = Kalman_time;
+      }
+    }
+    Wpa=Wpa/f;
+    Wqa=Wqa/f;
+    Wra=Wra/f;
+    MN=MN/f;
+    ME=ME/f;
+    MD=MD/f;
+    
+    Kalman_flag = 0;//Kalman filter 一時停止
+    init_kalman(Wpa, Wqa, Wra);//カルマンフィルタ初期化
+    //Xe(4,0)=Wpa;
+    //Xe(5,0)=Wqa;
+    //Xe(6,0)=Wra;
+    //Xp(4,0)=Wpa;
+    //Xp(5,0)=Wqa;
+    //Xp(6,0)=Wra;
+
+    printf("#omega ave %f %f %f\n",Wpa, Wqa, Wra);
+    printf("#omega now %f %f %f\n",Wp, Wq, Wr);
+    printf("#mag ave %f %f %f\n",MN, ME, MD);
+    printf("#mag now %f %f %f\n",Mx, My, Mz);
+    printf("#Kalman init Xe %12.4f %12.4f %12.4f %12.4f %12.4f %12.4f %12.4f\n",
+        Xe(0,0),Xe(1,0),Xe(2,0),Xe(3,0),Xe(4,0),Xe(5,0),Xe(6,0));
+    printf("#Kalman init Xp %12.4f %12.4f %12.4f %12.4f %12.4f %12.4f %12.4f\n",
+        Xp(0,0),Xp(1,0),Xp(2,0),Xp(3,0),Xp(4,0),Xp(5,0),Xp(6,0));
+    printf("#Kalman init  P %12.4f %12.4f %12.4f %12.4f %12.4f %12.4f %12.4f\n",
+        P(0,0),P(1,1),P(2,2),P(3,3),P(4,4),P(5,5),P(6,6));
+
+    Kalman_time=0.0;
+    Kalman_flag = 1;//Kalman filter 再開
+
+
+    f=0;
+    old_kalman_time=Kalman_time;
+    while(Kalman_time<6.0){
+      if(Kalman_time!=old_kalman_time)
+      {
+        printf("#Kalman time %5.2f\r", Kalman_time);
+        Q0av += Xe(0,0);
+        f=f+1;
+        old_kalman_time=Kalman_time;
+      }
+
+    }
+    printf("\n");
+    Q0av/=f;
+    Q0av=abs(Q0av);
+    printf("#Q0av=%f\n",Q0av);
+    if(Q0av<0.995 || isinf(Q0av)){
+      printf("#Kalman filter Failure !\n");
+      for (int i=0;i<100;i++)
+      {
+        gpio_put(LED_PIN, 1);
+        sleep_ms(10);
+        gpio_put(LED_PIN, 0);
+        sleep_ms(10);
+      }
+    }
+    else{
+      printf("#Kalman filter Sucess !\n");
+      for (int i=0;i<10;i++)
+      {
+        gpio_put(LED_PIN, 1);
+        sleep_ms(100);
+        gpio_put(LED_PIN, 0);
+        sleep_ms(100);
+      }
+    }
+  }
+
+  f=0;
   old_kalman_time=Kalman_time;
-  while(Kalman_time<5.0){
+  while(Kalman_time<10.0){
     if(Kalman_time!=old_kalman_time)
     {
+      printf("#Kalman time %5.2f\r", Kalman_time);
       Phiav += Phi;
       Thetaav += Theta;
       Psiav += Psi;
@@ -657,22 +725,67 @@ int main(void)
   Phiav/=f;
   Thetaav/=f;
   Psiav/=f;
-  
-  //printf("#angle  ave %f %f %f\n",Phiav, Thetaav, Psiav);
-
-  while(Kalman_time<15.0);
-
-  for (int i=0;i<10;i++)
-  {
-    gpio_put(LED_PIN, 1);
-    sleep_ms(100);
-    gpio_put(LED_PIN, 0);
-    sleep_ms(100);
-  }
+  printf("\n");
+  printf("#angle ave %f %f %f\n",Phiav, Thetaav, Psiav);
 
   while(1)
   { 
   }
 
 }
+void read_sensor(void)
+{
+  float mx1,my1,mz1;
 
+  imu_mag_data_read();
+  Wp=    angular_rate_mdps[0]*0.001*0.017453292;
+  Wq=    angular_rate_mdps[1]*0.001*0.017453292;
+  Wr=   -angular_rate_mdps[2]*0.001*0.017453292;
+  Dmx=  -(magnetic_field_mgauss[0]);
+  Dmy=   (magnetic_field_mgauss[1]);
+  Dmz=  -(magnetic_field_mgauss[2]);
+
+  //回転行列
+  const float rot[9]={-0.78435472, -0.62015392, -0.01402787,
+    0.61753358, -0.78277935,  0.07686857,
+    -0.05865107,  0.05162955,  0.99694255};
+  //中心座標
+  const float center[3]={-109.32529343620176, 72.76584808916506, 759.2285249891385};
+  //拡大係数
+  const float zoom[3]={0.002034773458122364, 0.002173892202021849, 0.0021819494099235273};
+
+  //回転・平行移動・拡大
+  mx1 = zoom[0]*( rot[0]*Dmx +rot[1]*Dmy +rot[2]*Dmz -center[0]);
+  my1 = zoom[1]*( rot[3]*Dmx +rot[4]*Dmy +rot[5]*Dmz -center[1]);
+  mz1 = zoom[2]*( rot[6]*Dmx +rot[7]*Dmy +rot[8]*Dmz -center[2]);
+  //逆回転
+  Mx = rot[0]*mx1 +rot[3]*my1 +rot[6]*mz1;
+  My = rot[1]*mx1 +rot[4]*my1 +rot[7]*mz1;
+  Mz = rot[2]*mx1 +rot[5]*my1 +rot[8]*mz1; 
+  float mag_norm=sqrt(Mx*Mx +My*My +Mz*Mz);
+  Mx/=mag_norm;
+  My/=mag_norm;
+  Mz/=mag_norm;
+}
+
+
+float rocking_wings(void)
+{
+  float freq = 1.5;//Hz
+  float amp  = 25;//deg
+  
+  if(Rocking_flag == 0)
+  {
+    Rocking_time = Kalman_time;
+    Rocking_flag = 1;
+  }
+  else if(Kalman_time - Rocking_time < 3.0)
+  {
+    return amp*M_PI/180.0*sin(freq*2*M_PI*Kalman_time);
+  }
+  else
+  {
+    return 0.0;
+  }
+  return 0.0;
+}
